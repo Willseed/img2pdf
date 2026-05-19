@@ -1,7 +1,10 @@
 /// <reference lib="webworker" />
 
 import { PDFDocument } from 'pdf-lib';
+import { ZH_TW } from './i18n';
 import { MainToWorkerMessage, WorkerToMainMessage } from './pdf-worker.types';
+
+const COPY = ZH_TW.worker;
 
 const cancelledJobs = new Set<string>();
 
@@ -78,12 +81,12 @@ async function processJob(
       } satisfies WorkerToMainMessage,
       [pdfBuffer],
     );
-  } catch (error) {
+  } catch {
     post({
       type: 'ERROR',
       jobId: message.jobId,
       errorCode: 'PDF_CREATION_FAILED',
-      message: error instanceof Error ? error.message : String(error),
+      message: COPY.pdfCreationFailed,
     });
   }
 }
@@ -99,7 +102,7 @@ async function resizeBitmap(
   const canvas = new OffscreenCanvas(width, height);
   const context = canvas.getContext('2d', { alpha: false });
   if (!context) {
-    throw new Error('Could not create worker canvas.');
+    throw new Error(COPY.canvasUnavailable);
   }
 
   context.drawImage(bitmap, 0, 0, width, height);

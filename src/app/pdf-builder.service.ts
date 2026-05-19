@@ -2,7 +2,6 @@ import { Injectable, computed, inject, OnDestroy, signal } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import {
   CompleteMessage,
-  ErrorMessage,
   ImageEntry,
   ImageMimeType,
   PdfJobOptions,
@@ -11,9 +10,12 @@ import {
   StartJobMessage,
   WorkerToMainMessage,
 } from './pdf-worker.types';
+import { ZH_TW } from './i18n';
 
-const MAX_IMAGES = 15;
-const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
+export const MAX_IMAGES = 15;
+const MAX_FILE_SIZE_MB = 20;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+const COPY = ZH_TW.service;
 const DEFAULT_OPTIONS: Required<PdfJobOptions> = {
   pageSize: [595.28, 841.89],
   maxImageDimension: 2048,
@@ -48,7 +50,7 @@ export class PdfBuilderService implements OnDestroy {
     images: [],
     status: 'idle',
     progress: 0,
-    progressText: 'Ready',
+    progressText: COPY.ready,
     pdfUrl: null,
     error: null,
   });
@@ -72,9 +74,7 @@ export class PdfBuilderService implements OnDestroy {
     const remainingSlots = Math.max(0, MAX_IMAGES - current.length);
 
     if (incoming.length > remainingSlots) {
-      errors.push(
-        `最多只能選擇 ${MAX_IMAGES} 張圖片，已略過 ${incoming.length - remainingSlots} 張。`,
-      );
+      errors.push(COPY.maxImages(MAX_IMAGES, incoming.length - remainingSlots));
     }
 
     const accepted: ImageEntry[] = [];
@@ -99,7 +99,7 @@ export class PdfBuilderService implements OnDestroy {
       images: [...state.images, ...accepted],
       status: 'idle',
       progress: 0,
-      progressText: accepted.length ? `${accepted.length} image(s) added.` : state.progressText,
+      progressText: accepted.length ? COPY.added(accepted.length) : state.progressText,
       pdfUrl: null,
       error: errors.length ? errors.join('\n') : null,
     }));
@@ -135,7 +135,7 @@ export class PdfBuilderService implements OnDestroy {
       ...state,
       status: 'processing',
       progress: 1,
-      progressText: `Preparing ${images.length} image(s).`,
+      progressText: COPY.preparing(images.length),
       pdfUrl: null,
       error: null,
       images: state.images.map((image) => ({ ...image, status: 'pending' })),
@@ -147,8 +147,8 @@ export class PdfBuilderService implements OnDestroy {
       } else {
         await this.buildPdfWithMainThreadResize(images);
       }
-    } catch (error) {
-      this.handleBuildError(error);
+    } catch {
+      this.handleBuildError();
     }
   }
 
@@ -161,7 +161,7 @@ export class PdfBuilderService implements OnDestroy {
       ...state,
       status: 'idle',
       progress: 0,
-      progressText: 'Generation cancelled.',
+      progressText: COPY.cancelled,
       images: state.images.map((image) => ({ ...image, status: 'pending' })),
     }));
   }
@@ -177,7 +177,7 @@ export class PdfBuilderService implements OnDestroy {
       images: [],
       status: 'idle',
       progress: 0,
-      progressText: 'Ready',
+      progressText: COPY.ready,
       pdfUrl: null,
       error: null,
     });
@@ -193,8 +193,8 @@ export class PdfBuilderService implements OnDestroy {
     const blob = await response.blob();
     const file = new File([blob], this.outputFileName(), { type: 'application/pdf' });
     const shareData: ShareData = {
-      title: 'img2pdf PDF',
-      text: 'Generated locally in your browser.',
+      title: COPY.shareTitle,
+      text: COPY.shareText,
       files: [file],
     };
 
@@ -202,7 +202,18 @@ export class PdfBuilderService implements OnDestroy {
       return;
     }
 
-    await navigator.share(shareData);
+    try {
+      await navigator.share(shareData);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return;
+      }
+
+      this.stateSignal.update((state) => ({
+        ...state,
+        error: COPY.shareFailed,
+      }));
+    }
   }
 
   outputFileName(): string {
@@ -244,13 +255,13 @@ export class PdfBuilderService implements OnDestroy {
 
       this.worker.onerror = (event) => {
         this.cancelActiveWorker();
-        reject(new Error(event.message || 'PDF worker failed.'));
+        reject(new Error(event.message || COPY.workerFailed));
       };
 
       void this.prepareWorkerJob(jobId, images)
         .then(({ message, transferList }) => {
           if (!this.worker || this.activeJobId !== jobId) {
-            throw new Error('PDF generation was cancelled before it started.');
+            throw new Error(COPY.cancelledBeforeStart);
           }
           this.worker.postMessage(message, transferList);
         })
@@ -298,7 +309,7 @@ export class PdfBuilderService implements OnDestroy {
         index,
         images.length,
         'resize',
-        `Optimizing image ${index + 1} of ${images.length}.`,
+        COPY.optimizing(index + 1, images.length),
       );
 
       const normalized = await this.normalizeImageOnMainThread(images[index].file);
@@ -318,7 +329,7 @@ export class PdfBuilderService implements OnDestroy {
         index + 1,
         images.length,
         'embed',
-        `Added image ${index + 1} of ${images.length}.`,
+        COPY.addedPage(index + 1, images.length),
       );
       await this.yieldToBrowser();
     }
@@ -326,7 +337,7 @@ export class PdfBuilderService implements OnDestroy {
     this.stateSignal.update((state) => ({
       ...state,
       progress: 96,
-      progressText: 'Finalizing PDF.',
+      progressText: COPY.finalizing,
     }));
 
     const pdfBytes = await doc.save();
@@ -354,7 +365,7 @@ export class PdfBuilderService implements OnDestroy {
     canvas.height = height;
     const context = canvas.getContext('2d', { alpha: false });
     if (!context) {
-      return Promise.reject(new Error('Could not create image canvas.'));
+      return Promise.reject(new Error(COPY.canvasUnavailable));
     }
 
     context.drawImage(image, 0, 0, width, height);
@@ -363,7 +374,7 @@ export class PdfBuilderService implements OnDestroy {
       canvas.toBlob(
         (blob) => {
           if (!blob) {
-            reject(new Error('Could not encode image.'));
+            reject(new Error(COPY.imageEncodeFailed));
             return;
           }
           blob
@@ -387,7 +398,7 @@ export class PdfBuilderService implements OnDestroy {
       };
       image.onerror = () => {
         URL.revokeObjectURL(url);
-        reject(new Error(`Could not decode ${file.name}.`));
+        reject(new Error(COPY.imageDecodeFailed(file.name)));
       };
       image.src = url;
     });
@@ -397,8 +408,8 @@ export class PdfBuilderService implements OnDestroy {
     const displayIndex = Math.min(message.current + 1, message.total);
     const text =
       message.phase === 'serialize'
-        ? 'Finalizing PDF.'
-        : `Processing image ${displayIndex} of ${message.total}.`;
+        ? COPY.finalizing
+        : COPY.processing(displayIndex, message.total);
 
     if (message.phase === 'embed') {
       this.markImage(message.current, 'done');
@@ -421,28 +432,25 @@ export class PdfBuilderService implements OnDestroy {
     this.revokePdfUrl();
     const blob = new Blob([pdfBuffer], { type: 'application/pdf' });
     const pdfUrl = URL.createObjectURL(blob);
-    const seconds = durationMs > 0 ? ` in ${(durationMs / 1000).toFixed(1)}s` : '';
-
     this.stateSignal.update((state) => ({
       ...state,
       status: 'complete',
       progress: 100,
-      progressText: `PDF ready: ${imageCount} page(s)${seconds}.`,
+      progressText: COPY.readyPdf(imageCount, durationMs),
       pdfUrl,
       error: null,
       images: state.images.map((image) => ({ ...image, status: 'done' })),
     }));
   }
 
-  private handleBuildError(error: unknown): void {
+  private handleBuildError(): void {
     this.cancelActiveWorker();
-    const message = error instanceof Error ? error.message : String(error);
     this.stateSignal.update((state) => ({
       ...state,
       status: 'error',
       progress: 0,
-      progressText: 'PDF generation failed.',
-      error: message,
+      progressText: COPY.generationFailed,
+      error: COPY.generationFailed,
       images: state.images.map((image) => ({
         ...image,
         status: image.status === 'processing' ? 'error' : image.status,
@@ -452,16 +460,16 @@ export class PdfBuilderService implements OnDestroy {
 
   private validateFile(file: File): string | null {
     if (file.size === 0) {
-      return `${file.name} is empty.`;
+      return COPY.fileEmpty(file.name);
     }
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      return `${file.name} exceeds the 20 MB limit.`;
+      return COPY.fileTooLarge(file.name, MAX_FILE_SIZE_MB);
     }
     if (REJECTED_MIME_TYPES.has(file.type) || /\.(heic|heif)$/i.test(file.name)) {
-      return `${file.name} is HEIC/HEIF. Please convert it to JPEG or PNG first.`;
+      return COPY.rejectedHeic(file.name);
     }
     if (!ACCEPTED_MIME_TYPES.has(file.type)) {
-      return `${file.name} is not a supported image type. Use JPEG, PNG, WebP, or AVIF.`;
+      return COPY.unsupportedType(file.name);
     }
     return null;
   }

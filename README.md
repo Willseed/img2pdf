@@ -1,6 +1,6 @@
 # img2pdf
 
-Pure frontend Angular 21 app that turns up to 15 selected images into a PDF without uploading image bytes to a server. The UI follows `DESIGN.md`, uses a hash-based build identity instead of a numeric app version, and the GitHub Actions pipeline only deploys after build and Playwright Chromium/WebKit tests pass.
+Pure frontend Angular 21 app that turns up to 15 selected images into a PDF without uploading image bytes to a server. The zh-TW UI follows `DESIGN.md` as a single-viewport workflow, uses a hash-based build identity instead of a numeric app version, and the GitHub Actions pipeline only deploys after build and Playwright Chromium/WebKit tests pass.
 
 ## Development server
 
@@ -28,12 +28,17 @@ ng generate --help
 
 ## Architecture
 
-- `src/app/app.*`: Apple-inspired upload, preview, progress, download, and share UI.
+- `src/app/app.*`: Apple-inspired upload, preview, progress, download, and share UI designed to keep the desktop workflow in one viewport.
+- `src/app/i18n.ts`: Traditional Chinese (`zh-TW`) copy dictionary shared by the app, PDF service, and worker. No Angular extraction/translation command is configured; update copy here instead of hard-coding strings.
 - `src/app/pdf-builder.service.ts`: file validation, 15-image cap, object URL cleanup, worker orchestration, fallback canvas path, and PDF result state.
 - `src/app/pdf.worker.ts`: Web Worker pipeline using `createImageBitmap`, `OffscreenCanvas`, and `pdf-lib`.
 - `src/app/pdf-worker.types.ts`: typed protocol for worker messages.
 - `scripts/write-build-info.mjs`: writes `src/app/build-info.ts` from `GITHUB_SHA` or the local git hash; the visible app version is a hash, not a numeric release.
 - `.github/workflows/ci.yml`: build, Playwright Chromium/WebKit tests, then GitHub Pages deploy gated by successful CI.
+
+## Copy and localization
+
+All user-facing app copy is Traditional Chinese (`zh-TW`) and flows through `src/app/i18n.ts`. The preview list scrolls inside its panel so the primary desktop user flow remains one page/one viewport rather than a long document scroll.
 
 ## Building
 

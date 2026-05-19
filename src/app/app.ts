@@ -1,6 +1,8 @@
 import { Component, ElementRef, ViewChild, inject, signal } from '@angular/core';
 import { BUILD_HASH } from './build-info';
-import { PdfBuilderService } from './pdf-builder.service';
+import { ZH_TW } from './i18n';
+import { MAX_IMAGES, PdfBuilderService } from './pdf-builder.service';
+import type { ImageStatus } from './pdf-worker.types';
 
 @Component({
   selector: 'app-root',
@@ -14,6 +16,12 @@ export class App {
   protected readonly pdfBuilder = inject(PdfBuilderService);
   protected readonly buildHash = BUILD_HASH;
   protected readonly isDragging = signal(false);
+  protected readonly maxImages = MAX_IMAGES;
+  protected readonly text = ZH_TW.app;
+
+  protected imageStatusLabel(status: ImageStatus): string {
+    return ZH_TW.imageStatus[status];
+  }
 
   protected openFilePicker(): void {
     this.fileInput?.nativeElement.click();

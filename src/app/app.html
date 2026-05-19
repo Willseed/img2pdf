@@ -1,33 +1,25 @@
 <main class="page-shell">
-  <nav class="global-nav" aria-label="Primary">
-    <a class="brand" href="/" aria-label="img2pdf home">img2pdf</a>
-    <span class="nav-status">Build {{ buildHash }}</span>
+  <nav class="global-nav" [attr.aria-label]="text.nav.label">
+    <a class="brand" href="/" [attr.aria-label]="text.nav.homeAria">img2pdf</a>
+    <span class="nav-status">{{ text.nav.build(buildHash) }}</span>
   </nav>
 
-  <section class="hero tile-light" aria-labelledby="hero-title">
-    <div class="hero-copy">
-      <p class="eyebrow">Private browser-only conversion</p>
-      <h1 id="hero-title">Turn 15 images into one PDF without uploading them.</h1>
-      <p class="lead">
-        A mobile-first Angular experience that optimizes every photo locally, keeps the interface
-        responsive, and produces a clean PDF ready to download or share.
-      </p>
-      <div class="hero-actions">
-        <button type="button" class="pill primary" (click)="openFilePicker()">Choose images</button>
-        <a class="pill ghost" href="#workspace">See workspace</a>
+  <section class="dashboard" aria-labelledby="app-title">
+    <header class="dashboard-hero">
+      <div>
+        <p class="eyebrow">{{ text.hero.eyebrow }}</p>
+        <h1 id="app-title">{{ text.hero.title }}</h1>
       </div>
-    </div>
-  </section>
+      <p class="lead">{{ text.hero.lead }}</p>
+    </header>
 
-  <section id="workspace" class="workspace tile-dark" aria-labelledby="workspace-title">
-    <div class="workspace-grid">
-      <section class="upload-card" aria-labelledby="workspace-title">
-        <p class="eyebrow on-dark">Step 1</p>
-        <h2 id="workspace-title">Select up to 15 images</h2>
-        <p class="muted">
-          JPEG, PNG, WebP, and AVIF are accepted. HEIC/HEIF is rejected with guidance so the browser
-          never stalls on unsupported camera files.
-        </p>
+    <div class="workflow-grid">
+      <section class="panel upload-panel" aria-labelledby="upload-title">
+        <div class="panel-heading">
+          <p class="eyebrow on-dark">{{ text.upload.step }}</p>
+          <h2 id="upload-title">{{ text.upload.title }}</h2>
+          <p class="muted">{{ text.upload.description }}</p>
+        </div>
 
         <input
           #fileInput
@@ -36,7 +28,10 @@
           type="file"
           accept="image/jpeg,image/png,image/webp,image/avif"
           multiple
-          aria-describedby="upload-help upload-error"
+          [attr.aria-label]="text.upload.inputLabel"
+          [attr.aria-describedby]="
+            pdfBuilder.state().error ? 'upload-help upload-error' : 'upload-help'
+          "
           (change)="onFileChange($event)"
         />
 
@@ -48,9 +43,11 @@
           (dragleave)="onDragLeave()"
           (drop)="onDrop($event)"
         >
-          <span class="drop-title">Drop images here</span>
-          <span id="upload-help" class="drop-copy">or tap to browse from your device</span>
-          <span class="counter">{{ pdfBuilder.selectedCount() }}/15 selected</span>
+          <span class="drop-title">{{ text.upload.dropTitle }}</span>
+          <span id="upload-help" class="drop-copy">{{ text.upload.dropCopy }}</span>
+          <span class="counter">{{
+            text.upload.counter(pdfBuilder.selectedCount(), maxImages)
+          }}</span>
         </label>
 
         @if (pdfBuilder.state().error) {
@@ -58,16 +55,67 @@
         }
       </section>
 
-      <section class="control-card" aria-labelledby="process-title">
-        <p class="eyebrow on-dark">Step 2</p>
-        <h2 id="process-title">Generate locally</h2>
-        <p class="muted">
-          Images are resized before PDF embedding. A Web Worker is used when supported; older
-          browsers fall back to a safe sequential canvas path.
-        </p>
+      <section class="panel preview-panel" aria-labelledby="preview-title">
+        <div class="panel-heading compact-heading">
+          <p class="eyebrow">{{ text.preview.step }}</p>
+          <h2 id="preview-title">{{ text.preview.title }}</h2>
+          <p class="body-copy">{{ text.preview.description }}</p>
+        </div>
+
+        @if (pdfBuilder.state().images.length) {
+          <div class="preview-list" role="list" [attr.aria-label]="text.preview.listLabel">
+            @for (image of pdfBuilder.state().images; track image.id; let index = $index) {
+              <article
+                class="preview-card"
+                [class.processing]="image.status === 'processing'"
+                role="listitem"
+              >
+                <div class="thumb-frame">
+                  <img
+                    [src]="image.previewUrl"
+                    [alt]="text.preview.imageAlt(image.file.name, index + 1)"
+                    loading="lazy"
+                  />
+                </div>
+                <div class="preview-meta">
+                  <span class="page-number">{{ text.preview.page(index + 1) }}</span>
+                  <h3 [title]="image.file.name">{{ image.file.name }}</h3>
+                  <p>{{ imageStatusLabel(image.status) }}</p>
+                </div>
+                <button
+                  type="button"
+                  class="preview-remove"
+                  [disabled]="pdfBuilder.isProcessing()"
+                  [attr.aria-label]="text.preview.removeLabel(image.file.name)"
+                  (click)="pdfBuilder.removeImage(image.id)"
+                >
+                  {{ text.preview.remove }}
+                </button>
+              </article>
+            }
+          </div>
+        } @else {
+          <div class="empty-state">
+            <span>{{ text.preview.empty }}</span>
+          </div>
+        }
+      </section>
+
+      <section class="panel action-panel" aria-labelledby="process-title">
+        <div class="panel-heading">
+          <p class="eyebrow on-dark">{{ text.actions.step }}</p>
+          <h2 id="process-title">{{ text.actions.title }}</h2>
+          <p class="muted">{{ text.actions.description }}</p>
+        </div>
 
         <div class="progress-wrap" aria-live="polite">
-          <progress max="100" [value]="pdfBuilder.state().progress"></progress>
+          <span id="progress-label" class="progress-label">{{ text.actions.progressLabel }}</span>
+          <progress
+            max="100"
+            [value]="pdfBuilder.state().progress"
+            aria-labelledby="progress-label"
+            [attr.aria-valuetext]="pdfBuilder.state().progressText"
+          ></progress>
           <span>{{ pdfBuilder.state().progressText }}</span>
         </div>
 
@@ -78,7 +126,7 @@
             [disabled]="!pdfBuilder.canGenerate()"
             (click)="generatePdf()"
           >
-            Generate PDF
+            {{ text.actions.generate }}
           </button>
           <button
             type="button"
@@ -86,62 +134,28 @@
             [disabled]="!pdfBuilder.isProcessing()"
             (click)="pdfBuilder.cancel()"
           >
-            Cancel
+            {{ text.actions.cancel }}
           </button>
         </div>
 
         @if (pdfBuilder.state().pdfUrl) {
-          <div class="download-panel">
-            <span>PDF is ready.</span>
+          <div class="download-panel" role="status" aria-live="polite">
+            <span>{{ text.actions.ready }}</span>
             <a
               class="pill primary"
               [href]="pdfBuilder.state().pdfUrl"
               [download]="pdfBuilder.outputFileName()"
             >
-              Download
+              {{ text.actions.download }}
             </a>
             @if (pdfBuilder.canShare()) {
-              <button type="button" class="pill ghost-dark" (click)="sharePdf()">Share</button>
+              <button type="button" class="pill ghost-dark" (click)="sharePdf()">
+                {{ text.actions.share }}
+              </button>
             }
           </div>
         }
       </section>
     </div>
-  </section>
-
-  <section class="preview-section tile-light" aria-labelledby="preview-title">
-    <div class="section-heading">
-      <p class="eyebrow">Step 3</p>
-      <h2 id="preview-title">Review the page order</h2>
-      <p class="body-copy">
-        Each thumbnail becomes one PDF page. Remove any photo before generating the final file.
-      </p>
-    </div>
-
-    @if (pdfBuilder.state().images.length) {
-      <div class="preview-grid">
-        @for (image of pdfBuilder.state().images; track image.id; let index = $index) {
-          <article class="preview-card" [class.processing]="image.status === 'processing'">
-            <img [src]="image.previewUrl" [alt]="image.file.name" loading="lazy" />
-            <div>
-              <span class="page-number">Page {{ index + 1 }}</span>
-              <h3>{{ image.file.name }}</h3>
-              <p>{{ image.status }}</p>
-            </div>
-            <button
-              type="button"
-              [disabled]="pdfBuilder.isProcessing()"
-              (click)="pdfBuilder.removeImage(image.id)"
-            >
-              Remove
-            </button>
-          </article>
-        }
-      </div>
-    } @else {
-      <div class="empty-state">
-        <span>No images selected yet.</span>
-      </div>
-    }
   </section>
 </main>
