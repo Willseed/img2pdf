@@ -1,0 +1,44 @@
+{
+  "name": "img2pdf",
+  "scripts": {
+    "ng": "ng",
+    "prestart": "node scripts/write-build-info.mjs",
+    "start": "ng serve",
+    "prebuild": "node scripts/write-build-info.mjs",
+    "build": "ng build",
+    "build:ci": "node scripts/write-build-info.mjs && ng build --configuration production",
+    "prewatch": "node scripts/write-build-info.mjs",
+    "watch": "ng build --watch --configuration development",
+    "pretest": "node scripts/write-build-info.mjs",
+    "test": "ng test --watch=false",
+    "pretest:watch": "node scripts/write-build-info.mjs",
+    "test:watch": "ng test",
+    "e2e": "playwright test",
+    "test:e2e": "npm run build && playwright test",
+    "ci": "npm run build:ci && npm test && npm run e2e"
+  },
+  "private": true,
+  "packageManager": "npm@11.12.1",
+  "dependencies": {
+    "@angular/common": "^21.2.0",
+    "@angular/compiler": "^21.2.0",
+    "@angular/core": "^21.2.0",
+    "@angular/forms": "^21.2.0",
+    "@angular/platform-browser": "^21.2.0",
+    "@angular/router": "^21.2.0",
+    "pdf-lib": "^1.17.1",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@angular/build": "^21.2.11",
+    "@angular/cli": "^21.2.11",
+    "@angular/compiler-cli": "^21.2.0",
+    "@playwright/test": "^1.60.0",
+    "http-server": "^14.1.1",
+    "jsdom": "^28.0.0",
+    "prettier": "^3.8.1",
+    "typescript": "~5.9.2",
+    "vitest": "^4.0.8"
+  }
+}
