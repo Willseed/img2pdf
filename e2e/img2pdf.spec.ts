@@ -7,6 +7,7 @@ import { ZH_TW } from '../src/app/i18n';
 
 const PNG_FIXTURE = createPngFixture();
 const DESKTOP_VIEWPORT = { width: 1440, height: 900 };
+const MOBILE_VIEWPORT = { width: 390, height: 844 };
 
 function imagePayloads(count: number, nameFactory = defaultImageName) {
   return Array.from({ length: count }, (_, index) => ({
@@ -183,6 +184,33 @@ test.describe('img2pdf browser workflow', () => {
     await expectPreviewCardsFitPanel(page);
   });
 
+  test('keeps the mobile create and download action visible in the viewport', async ({ page }) => {
+    await openApp(page, MOBILE_VIEWPORT);
+    await expectDocumentFitsViewport(page);
+    await page.locator('#image-input').setInputFiles(imagePayloads(3, longImageName));
+
+    const actionPanel = page.locator('.action-panel');
+    const generateButton = page.getByRole('button', { name: ZH_TW.app.actions.generate });
+
+    await expect(actionPanel).toBeVisible();
+    await expect(generateButton).toBeVisible();
+    await expect(generateButton).toBeInViewport();
+    await expectDocumentFitsViewport(page);
+
+    await page.locator('.workflow-grid').evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+    await expect(generateButton).toBeInViewport();
+    await expectDocumentFitsViewport(page);
+
+    await generateButton.click();
+
+    const downloadLink = page.getByRole('link', { name: ZH_TW.app.actions.download });
+    await expect(downloadLink).toBeVisible({ timeout: 30_000 });
+    await expect(downloadLink).toBeInViewport();
+    await expectDocumentFitsViewport(page);
+  });
+
   test('rejects images above the 15 file cap', async ({ page }) => {
     await openApp(page);
     await page.locator('#image-input').setInputFiles(imagePayloads(16));
@@ -212,7 +240,9 @@ test.describe('img2pdf browser workflow', () => {
     await page.locator('#image-input').setInputFiles(imagePayloads(15));
     await page.getByRole('button', { name: ZH_TW.app.actions.generate }).click();
 
-    await expect(page.getByText(ZH_TW.app.actions.ready)).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator('.download-panel')).toContainText(ZH_TW.app.actions.ready, {
+      timeout: 30_000,
+    });
 
     const downloadPromise = page.waitForEvent('download');
     await page.getByRole('link', { name: ZH_TW.app.actions.download }).click();
