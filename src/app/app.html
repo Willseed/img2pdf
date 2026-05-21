@@ -7,155 +7,326 @@
   <section class="dashboard" aria-labelledby="app-title">
     <header class="dashboard-hero">
       <div>
-        <p class="eyebrow">{{ text.hero.eyebrow }}</p>
-        <h1 id="app-title">{{ text.hero.title }}</h1>
+        <p class="eyebrow">{{ heroText().eyebrow }}</p>
+        <h1 id="app-title">{{ heroText().title }}</h1>
       </div>
-      <p class="lead">{{ text.hero.lead }}</p>
+      <p class="lead">{{ heroText().lead }}</p>
     </header>
 
-    <div class="workflow-grid">
-      <section class="panel upload-panel" aria-labelledby="upload-title">
-        <div class="panel-heading">
-          <p class="eyebrow on-dark">{{ text.upload.step }}</p>
-          <h2 id="upload-title">{{ text.upload.title }}</h2>
-          <p class="muted">{{ text.upload.description }}</p>
-        </div>
-
-        <input
-          #fileInput
-          id="image-input"
-          class="visually-hidden"
-          type="file"
-          accept="image/jpeg,image/png,image/webp,image/avif"
-          multiple
-          [attr.aria-label]="text.upload.inputLabel"
-          [attr.aria-describedby]="
-            pdfBuilder.state().error ? 'upload-help upload-error' : 'upload-help'
-          "
-          (change)="onFileChange($event)"
-        />
-
-        <label
-          class="drop-zone"
-          [class.dragging]="isDragging()"
-          for="image-input"
-          (dragover)="onDragOver($event)"
-          (dragleave)="onDragLeave()"
-          (drop)="onDrop($event)"
-        >
-          <span class="drop-title">{{ text.upload.dropTitle }}</span>
-          <span id="upload-help" class="drop-copy">{{ text.upload.dropCopy }}</span>
-          <span class="counter">{{
-            text.upload.counter(pdfBuilder.selectedCount(), maxImages)
-          }}</span>
-        </label>
-
-        @if (pdfBuilder.state().error) {
-          <p id="upload-error" class="alert" role="alert">{{ pdfBuilder.state().error }}</p>
-        }
-      </section>
-
-      <section class="panel preview-panel" aria-labelledby="preview-title">
-        <div class="panel-heading compact-heading">
-          <p class="eyebrow">{{ text.preview.step }}</p>
-          <h2 id="preview-title">{{ text.preview.title }}</h2>
-          <p class="body-copy">{{ text.preview.description }}</p>
-        </div>
-
-        @if (pdfBuilder.state().images.length) {
-          <div class="preview-list" role="list" [attr.aria-label]="text.preview.listLabel">
-            @for (image of pdfBuilder.state().images; track image.id; let index = $index) {
-              <article
-                class="preview-card"
-                [class.processing]="image.status === 'processing'"
-                role="listitem"
-              >
-                <div class="thumb-frame">
-                  <img
-                    [src]="image.previewUrl"
-                    [alt]="text.preview.imageAlt(image.file.name, index + 1)"
-                    loading="lazy"
-                  />
-                </div>
-                <div class="preview-meta">
-                  <span class="page-number">{{ text.preview.page(index + 1) }}</span>
-                  <h3 [title]="image.file.name">{{ image.file.name }}</h3>
-                  <p>{{ imageStatusLabel(image.status) }}</p>
-                </div>
-                <button
-                  type="button"
-                  class="preview-remove"
-                  [disabled]="pdfBuilder.isProcessing()"
-                  [attr.aria-label]="text.preview.removeLabel(image.file.name)"
-                  (click)="pdfBuilder.removeImage(image.id)"
-                >
-                  {{ text.preview.remove }}
-                </button>
-              </article>
-            }
-          </div>
-        } @else {
-          <div class="empty-state">
-            <span>{{ text.preview.empty }}</span>
-          </div>
-        }
-      </section>
-
-      <section class="panel action-panel" aria-labelledby="process-title">
-        <div class="panel-heading">
-          <p class="eyebrow on-dark">{{ text.actions.step }}</p>
-          <h2 id="process-title">{{ text.actions.title }}</h2>
-          <p class="muted">{{ text.actions.description }}</p>
-        </div>
-
-        <div class="progress-wrap" aria-live="polite">
-          <span id="progress-label" class="progress-label">{{ text.actions.progressLabel }}</span>
-          <progress
-            max="100"
-            [value]="pdfBuilder.state().progress"
-            aria-labelledby="progress-label"
-            [attr.aria-valuetext]="pdfBuilder.state().progressText"
-          ></progress>
-          <span>{{ pdfBuilder.state().progressText }}</span>
-        </div>
-
-        <div class="control-actions">
-          <button
-            type="button"
-            class="pill primary"
-            [disabled]="!pdfBuilder.canGenerate()"
-            (click)="generatePdf()"
-          >
-            {{ text.actions.generate }}
-          </button>
-          <button
-            type="button"
-            class="pill secondary"
-            [disabled]="!pdfBuilder.isProcessing()"
-            (click)="pdfBuilder.cancel()"
-          >
-            {{ text.actions.cancel }}
-          </button>
-        </div>
-
-        @if (pdfBuilder.state().pdfUrl) {
-          <div class="download-panel" role="status" aria-live="polite">
-            <span>{{ text.actions.ready }}</span>
-            <a
-              class="pill primary"
-              [href]="pdfBuilder.state().pdfUrl"
-              [download]="pdfBuilder.outputFileName()"
-            >
-              {{ text.actions.download }}
-            </a>
-            @if (pdfBuilder.canShare()) {
-              <button type="button" class="pill ghost-dark" (click)="sharePdf()">
-                {{ text.actions.share }}
-              </button>
-            }
-          </div>
-        }
-      </section>
+    <div class="tool-tabs" role="tablist" [attr.aria-label]="text.tabs.label">
+      <button
+        id="image-tool-tab"
+        type="button"
+        role="tab"
+        class="tab-button"
+        [class.active]="activeTool() === 'images'"
+        [attr.aria-selected]="activeTool() === 'images'"
+        aria-controls="image-tool-panel"
+        (click)="selectTool('images')"
+      >
+        <span>{{ text.tabs.image }}</span>
+        <small>{{ text.tabs.imageDescription }}</small>
+      </button>
+      <button
+        id="unlock-tool-tab"
+        type="button"
+        role="tab"
+        class="tab-button"
+        [class.active]="activeTool() === 'unlock'"
+        [attr.aria-selected]="activeTool() === 'unlock'"
+        aria-controls="unlock-tool-panel"
+        (click)="selectTool('unlock')"
+      >
+        <span>{{ text.tabs.unlock }}</span>
+        <small>{{ text.tabs.unlockDescription }}</small>
+      </button>
     </div>
+
+    @if (activeTool() === 'images') {
+      <div
+        id="image-tool-panel"
+        class="workflow-grid"
+        role="tabpanel"
+        aria-labelledby="image-tool-tab"
+      >
+        <section class="panel upload-panel" aria-labelledby="upload-title">
+          <div class="panel-heading">
+            <p class="eyebrow on-dark">{{ text.upload.step }}</p>
+            <h2 id="upload-title">{{ text.upload.title }}</h2>
+            <p class="muted">{{ text.upload.description }}</p>
+          </div>
+
+          <input
+            #fileInput
+            id="image-input"
+            class="visually-hidden"
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/avif"
+            multiple
+            [attr.aria-label]="text.upload.inputLabel"
+            [attr.aria-describedby]="
+              pdfBuilder.state().error ? 'upload-help upload-error' : 'upload-help'
+            "
+            (change)="onFileChange($event)"
+          />
+
+          <label
+            class="drop-zone"
+            [class.dragging]="isDragging()"
+            for="image-input"
+            (dragover)="onDragOver($event)"
+            (dragleave)="onDragLeave()"
+            (drop)="onDrop($event)"
+          >
+            <span class="drop-title">{{ text.upload.dropTitle }}</span>
+            <span id="upload-help" class="drop-copy">{{ text.upload.dropCopy }}</span>
+            <span class="counter">{{
+              text.upload.counter(pdfBuilder.selectedCount(), maxImages)
+            }}</span>
+          </label>
+
+          @if (pdfBuilder.state().error) {
+            <p id="upload-error" class="alert" role="alert">{{ pdfBuilder.state().error }}</p>
+          }
+        </section>
+
+        <section class="panel preview-panel" aria-labelledby="preview-title">
+          <div class="panel-heading compact-heading">
+            <p class="eyebrow">{{ text.preview.step }}</p>
+            <h2 id="preview-title">{{ text.preview.title }}</h2>
+            <p class="body-copy">{{ text.preview.description }}</p>
+          </div>
+
+          @if (pdfBuilder.state().images.length) {
+            <div class="preview-list" role="list" [attr.aria-label]="text.preview.listLabel">
+              @for (image of pdfBuilder.state().images; track image.id; let index = $index) {
+                <article
+                  class="preview-card"
+                  [class.processing]="image.status === 'processing'"
+                  role="listitem"
+                >
+                  <div class="thumb-frame">
+                    <img
+                      [src]="image.previewUrl"
+                      [alt]="text.preview.imageAlt(image.file.name, index + 1)"
+                      loading="lazy"
+                    />
+                  </div>
+                  <div class="preview-meta">
+                    <span class="page-number">{{ text.preview.page(index + 1) }}</span>
+                    <h3 [title]="image.file.name">{{ image.file.name }}</h3>
+                    <p>{{ imageStatusLabel(image.status) }}</p>
+                  </div>
+                  <button
+                    type="button"
+                    class="preview-remove"
+                    [disabled]="pdfBuilder.isProcessing()"
+                    [attr.aria-label]="text.preview.removeLabel(image.file.name)"
+                    (click)="pdfBuilder.removeImage(image.id)"
+                  >
+                    {{ text.preview.remove }}
+                  </button>
+                </article>
+              }
+            </div>
+          } @else {
+            <div class="empty-state">
+              <span>{{ text.preview.empty }}</span>
+            </div>
+          }
+        </section>
+
+        <section class="panel action-panel" aria-labelledby="process-title">
+          <div class="panel-heading">
+            <p class="eyebrow on-dark">{{ text.actions.step }}</p>
+            <h2 id="process-title">{{ text.actions.title }}</h2>
+            <p class="muted">{{ text.actions.description }}</p>
+          </div>
+
+          <div class="progress-wrap" aria-live="polite">
+            <span id="progress-label" class="progress-label">{{ text.actions.progressLabel }}</span>
+            <progress
+              max="100"
+              [value]="pdfBuilder.state().progress"
+              aria-labelledby="progress-label"
+              [attr.aria-valuetext]="pdfBuilder.state().progressText"
+            ></progress>
+            <span>{{ pdfBuilder.state().progressText }}</span>
+          </div>
+
+          <div class="control-actions">
+            <button
+              type="button"
+              class="pill primary"
+              [disabled]="!pdfBuilder.canGenerate()"
+              (click)="generatePdf()"
+            >
+              {{ text.actions.generate }}
+            </button>
+            <button
+              type="button"
+              class="pill secondary"
+              [disabled]="!pdfBuilder.isProcessing()"
+              (click)="pdfBuilder.cancel()"
+            >
+              {{ text.actions.cancel }}
+            </button>
+          </div>
+
+          @if (pdfBuilder.state().pdfUrl) {
+            <div class="download-panel" role="status" aria-live="polite">
+              <span>{{ text.actions.ready }}</span>
+              <a
+                class="pill primary"
+                [href]="pdfBuilder.state().pdfUrl"
+                [download]="pdfBuilder.outputFileName()"
+              >
+                {{ text.actions.download }}
+              </a>
+              @if (pdfBuilder.canShare()) {
+                <button type="button" class="pill ghost-dark" (click)="sharePdf()">
+                  {{ text.actions.share }}
+                </button>
+              }
+            </div>
+          }
+        </section>
+      </div>
+    } @else {
+      <div
+        id="unlock-tool-panel"
+        class="workflow-grid unlock-grid"
+        role="tabpanel"
+        aria-labelledby="unlock-tool-tab"
+      >
+        <section class="panel upload-panel" aria-labelledby="unlock-upload-title">
+          <div class="panel-heading">
+            <p class="eyebrow on-dark">{{ text.unlock.upload.step }}</p>
+            <h2 id="unlock-upload-title">{{ text.unlock.upload.title }}</h2>
+            <p class="muted">{{ text.unlock.upload.description }}</p>
+          </div>
+
+          <input
+            #unlockFileInput
+            id="unlock-input"
+            class="visually-hidden"
+            type="file"
+            accept="application/pdf,.pdf"
+            [attr.aria-label]="text.unlock.upload.inputLabel"
+            [attr.aria-describedby]="
+              pdfUnlock.state().error ? 'unlock-upload-help unlock-error' : 'unlock-upload-help'
+            "
+            (change)="onUnlockFileChange($event)"
+          />
+
+          <label
+            class="drop-zone"
+            [class.dragging]="isUnlockDragging()"
+            for="unlock-input"
+            (dragover)="onUnlockDragOver($event)"
+            (dragleave)="onUnlockDragLeave()"
+            (drop)="onUnlockDrop($event)"
+          >
+            <span class="drop-title">{{ text.unlock.upload.dropTitle }}</span>
+            <span id="unlock-upload-help" class="drop-copy">{{ text.unlock.upload.dropCopy }}</span>
+          </label>
+
+          @if (pdfUnlock.state().error) {
+            <p id="unlock-error" class="alert" role="alert">{{ pdfUnlock.state().error }}</p>
+          }
+        </section>
+
+        <section class="panel preview-panel" aria-labelledby="unlock-details-title">
+          <div class="panel-heading compact-heading">
+            <p class="eyebrow">{{ text.unlock.details.step }}</p>
+            <h2 id="unlock-details-title">{{ text.unlock.details.title }}</h2>
+            <p class="body-copy">{{ text.unlock.details.description }}</p>
+          </div>
+
+          @if (pdfUnlock.state().file; as pdfFile) {
+            <article class="file-card" aria-live="polite">
+              <span class="page-number">{{ text.unlock.details.fileLabel }}</span>
+              <h3 [title]="pdfFile.name">{{ pdfFile.name }}</h3>
+              <p>{{ formatPdfSize(pdfFile) }}</p>
+              <strong>{{ text.unlock.details.ready }}</strong>
+            </article>
+          } @else {
+            <div class="empty-state">
+              <span>{{ text.unlock.details.empty }}</span>
+            </div>
+          }
+        </section>
+
+        <section class="panel action-panel" aria-labelledby="unlock-process-title">
+          <div class="panel-heading">
+            <p class="eyebrow on-dark">{{ text.unlock.actions.step }}</p>
+            <h2 id="unlock-process-title">{{ text.unlock.actions.title }}</h2>
+            <p class="muted">{{ text.unlock.actions.description }}</p>
+          </div>
+
+          <label class="password-field">
+            <span>{{ text.unlock.actions.passwordLabel }}</span>
+            <input
+              type="password"
+              autocomplete="current-password"
+              [placeholder]="text.unlock.actions.passwordPlaceholder"
+              [value]="unlockPassword()"
+              [disabled]="pdfUnlock.isProcessing()"
+              (input)="onUnlockPasswordInput($event)"
+            />
+          </label>
+
+          <div class="progress-wrap" aria-live="polite">
+            <span id="unlock-progress-label" class="progress-label">{{
+              text.unlock.actions.progressLabel
+            }}</span>
+            <progress
+              max="100"
+              [value]="pdfUnlock.state().progress"
+              aria-labelledby="unlock-progress-label"
+              [attr.aria-valuetext]="pdfUnlock.state().progressText"
+            ></progress>
+            <span>{{ pdfUnlock.state().progressText }}</span>
+          </div>
+
+          <div class="control-actions">
+            <button
+              type="button"
+              class="pill primary"
+              [disabled]="!pdfUnlock.canUnlock()"
+              (click)="unlockPdf()"
+            >
+              {{ text.unlock.actions.unlock }}
+            </button>
+            <button
+              type="button"
+              class="pill secondary"
+              [disabled]="!pdfUnlock.isProcessing()"
+              (click)="pdfUnlock.cancel()"
+            >
+              {{ text.unlock.actions.cancel }}
+            </button>
+          </div>
+
+          @if (pdfUnlock.state().unlockedUrl) {
+            <div class="download-panel" role="status" aria-live="polite">
+              <span>{{ text.unlock.actions.ready }}</span>
+              <a
+                class="pill primary"
+                [href]="pdfUnlock.state().unlockedUrl"
+                [download]="pdfUnlock.outputFileName()"
+              >
+                {{ text.unlock.actions.download }}
+              </a>
+              @if (pdfUnlock.canShare()) {
+                <button type="button" class="pill ghost-dark" (click)="shareUnlockedPdf()">
+                  {{ text.unlock.actions.share }}
+                </button>
+              }
+            </div>
+          }
+        </section>
+      </div>
+    }
   </section>
 </main>

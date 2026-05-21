@@ -23,10 +23,16 @@
               {
                 "glob": "**/*",
                 "input": "public"
+              },
+              {
+                "glob": "mupdf-wasm.wasm",
+                "input": "node_modules/mupdf/dist",
+                "output": "assets/mupdf"
               }
             ],
             "styles": ["src/styles.css"],
             "webWorkerTsConfig": "tsconfig.worker.json",
+            "externalDependencies": ["module", "node:fs"],
             "allowedCommonJsDependencies": ["pako"]
           },
           "configurations": {

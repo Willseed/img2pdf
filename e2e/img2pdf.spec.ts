@@ -3,11 +3,17 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { deflateSync } from 'node:zlib';
 import { PDFDocument } from 'pdf-lib';
+import type mupdfDefault from 'mupdf';
 import { ZH_TW } from '../src/app/i18n';
 
 const PNG_FIXTURE = createPngFixture();
 const DESKTOP_VIEWPORT = { width: 1440, height: 900 };
 const MOBILE_VIEWPORT = { width: 390, height: 844 };
+const UNLOCK_PASSWORD = 'correct-horse-battery-staple';
+const OWNER_PASSWORD = 'synthetic-owner-password';
+let mupdfPromise: Promise<typeof mupdfDefault> | null = null;
+let plainPdfFixturePromise: Promise<Buffer> | null = null;
+let encryptedPdfFixturePromise: Promise<Buffer> | null = null;
 
 function imagePayloads(count: number, nameFactory = defaultImageName) {
   return Array.from({ length: count }, (_, index) => ({
@@ -33,6 +39,49 @@ async function openApp(page: Page, viewport?: { width: number; height: number })
     await page.setViewportSize(viewport);
   }
   await page.goto('/');
+}
+
+async function selectUnlockTab(page: Page) {
+  const imageTab = page.getByRole('tab', { name: new RegExp(ZH_TW.app.tabs.image) });
+  const unlockTab = page.getByRole('tab', { name: new RegExp(ZH_TW.app.tabs.unlock) });
+
+  await expect(imageTab).toHaveAttribute('aria-selected', 'true');
+  await unlockTab.click();
+  await expect(unlockTab).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('heading', { name: ZH_TW.app.unlockHero.title })).toBeVisible();
+}
+
+async function uploadUnlockPdf(page: Page, buffer: Buffer, name: string) {
+  await page.locator('#unlock-input').setInputFiles({
+    name,
+    mimeType: 'application/pdf',
+    buffer,
+  });
+  await expect(page.getByText(ZH_TW.app.unlock.details.ready)).toBeVisible();
+}
+
+async function unlockSelectedPdf(page: Page, password: string) {
+  await page.getByRole('textbox', { name: ZH_TW.app.unlock.actions.passwordLabel }).fill(password);
+  await page.getByRole('button', { name: ZH_TW.app.unlock.actions.unlock }).click();
+}
+
+async function downloadUnlockedPdf(
+  page: Page,
+  testOutputDir: string,
+  fileName: string,
+): Promise<Buffer> {
+  await expect(page.locator('.download-panel')).toContainText(ZH_TW.app.unlock.actions.ready, {
+    timeout: 60_000,
+  });
+
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('link', { name: ZH_TW.app.unlock.actions.download }).click();
+  const download = await downloadPromise;
+  const pdfPath = join(testOutputDir, fileName);
+  await download.saveAs(pdfPath);
+
+  expect(download.suggestedFilename()).toMatch(/-unlocked\.pdf$/);
+  return readFileSync(pdfPath);
 }
 
 async function expectDocumentFitsViewport(page: Page) {
@@ -160,6 +209,77 @@ function crc32(buffer: Buffer): number {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
+async function createPlainPdfFixture(): Promise<Buffer> {
+  if (!plainPdfFixturePromise) {
+    plainPdfFixturePromise = (async () => {
+      const pdf = await PDFDocument.create();
+      const page = pdf.addPage([240, 180]);
+      page.drawText('Synthetic img2pdf unlock fixture', {
+        x: 24,
+        y: 90,
+        size: 12,
+      });
+      return Buffer.from(await pdf.save());
+    })();
+  }
+
+  return plainPdfFixturePromise;
+}
+
+async function createEncryptedPdfFixture(): Promise<Buffer> {
+  if (!encryptedPdfFixturePromise) {
+    encryptedPdfFixturePromise = (async () => {
+      const mupdf = await loadMuPdf();
+      const plainPdf = await createPlainPdfFixture();
+      const document = mupdf.Document.openDocument(plainPdf, 'application/pdf');
+      const pdf = document.asPDF();
+      if (!pdf) {
+        document.destroy();
+        throw new Error('Synthetic fixture did not open as a PDF.');
+      }
+
+      const encrypted = pdf.saveToBuffer({
+        encrypt: 'aes-256',
+        'user-password': UNLOCK_PASSWORD,
+        'owner-password': OWNER_PASSWORD,
+      });
+      try {
+        return Buffer.from(encrypted.asUint8Array());
+      } finally {
+        encrypted.destroy();
+        document.destroy();
+      }
+    })();
+  }
+
+  return encryptedPdfFixturePromise;
+}
+
+async function expectPdfOpensWithoutPassword(pdfBytes: Buffer) {
+  expect(pdfBytes.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+
+  const mupdf = await loadMuPdf();
+  const document = mupdf.Document.openDocument(pdfBytes, 'application/pdf');
+  try {
+    expect(document.needsPassword()).toBe(false);
+    expect(document.getMetaData(mupdf.Document.META_ENCRYPTION) ?? 'None').toBe('None');
+    expect(document.countPages()).toBe(1);
+  } finally {
+    document.destroy();
+  }
+
+  const pdf = await PDFDocument.load(pdfBytes);
+  expect(pdf.getPageCount()).toBe(1);
+}
+
+async function loadMuPdf(): Promise<typeof mupdfDefault> {
+  if (!mupdfPromise) {
+    mupdfPromise = import('mupdf').then((module) => module.default);
+  }
+
+  return mupdfPromise;
+}
+
 test.describe('img2pdf browser workflow', () => {
   test('accepts exactly 15 images', async ({ page }) => {
     await openApp(page);
@@ -255,5 +375,85 @@ test.describe('img2pdf browser workflow', () => {
 
     const pdf = await PDFDocument.load(readFileSync(pdfPath));
     expect(pdf.getPageCount()).toBe(15);
+  });
+
+  test('switches tabs and unlocks a password-protected PDF download', async ({
+    page,
+  }, testInfo) => {
+    await openApp(page);
+    await selectUnlockTab(page);
+    await uploadUnlockPdf(page, await createEncryptedPdfFixture(), 'locked-synthetic.pdf');
+    await unlockSelectedPdf(page, UNLOCK_PASSWORD);
+
+    const unlockedPdf = await downloadUnlockedPdf(
+      page,
+      testInfo.outputDir,
+      'unlocked-synthetic.pdf',
+    );
+
+    await expectPdfOpensWithoutPassword(unlockedPdf);
+  });
+
+  test('shows a recoverable wrong password error for encrypted PDFs', async ({
+    page,
+  }, testInfo) => {
+    await openApp(page);
+    await selectUnlockTab(page);
+    await uploadUnlockPdf(page, await createEncryptedPdfFixture(), 'recoverable-password.pdf');
+    await unlockSelectedPdf(page, 'wrong-password');
+
+    await expect(page.getByRole('alert')).toContainText(ZH_TW.unlockWorker.wrongPassword, {
+      timeout: 60_000,
+    });
+    await expect(page.getByRole('button', { name: ZH_TW.app.unlock.actions.unlock })).toBeEnabled();
+    await expect(page.getByText('recoverable-password.pdf')).toBeVisible();
+
+    await unlockSelectedPdf(page, UNLOCK_PASSWORD);
+    const unlockedPdf = await downloadUnlockedPdf(
+      page,
+      testInfo.outputDir,
+      'recoverable-unlocked.pdf',
+    );
+    await expectPdfOpensWithoutPassword(unlockedPdf);
+  });
+
+  test('reports unencrypted PDFs without replacing the selected file', async ({ page }) => {
+    await openApp(page);
+    await selectUnlockTab(page);
+    await uploadUnlockPdf(page, await createPlainPdfFixture(), 'already-open.pdf');
+    await unlockSelectedPdf(page, '');
+
+    await expect(page.getByRole('alert')).toContainText(ZH_TW.unlockWorker.unencryptedPdf, {
+      timeout: 60_000,
+    });
+    await expect(page.getByText('already-open.pdf')).toBeVisible();
+    await expect(page.getByRole('button', { name: ZH_TW.app.unlock.actions.unlock })).toBeEnabled();
+    await expect(page.getByRole('link', { name: ZH_TW.app.unlock.actions.download })).toHaveCount(
+      0,
+    );
+  });
+
+  test('keeps the mobile unlock tab and download action usable', async ({ page }, testInfo) => {
+    await openApp(page, MOBILE_VIEWPORT);
+
+    const unlockTab = page.getByRole('tab', { name: new RegExp(ZH_TW.app.tabs.unlock) });
+    await expect(unlockTab).toBeVisible();
+    await expect(unlockTab).toBeInViewport();
+    await selectUnlockTab(page);
+    await uploadUnlockPdf(page, await createEncryptedPdfFixture(), 'mobile-locked.pdf');
+
+    const unlockButton = page.getByRole('button', { name: ZH_TW.app.unlock.actions.unlock });
+    await expect(unlockButton).toBeVisible();
+    await expect(unlockButton).toBeInViewport();
+
+    await unlockSelectedPdf(page, UNLOCK_PASSWORD);
+
+    const downloadLink = page.getByRole('link', { name: ZH_TW.app.unlock.actions.download });
+    await expect(downloadLink).toBeVisible({ timeout: 60_000 });
+    await expect(downloadLink).toBeInViewport();
+    await expectDocumentFitsViewport(page);
+
+    const unlockedPdf = await downloadUnlockedPdf(page, testInfo.outputDir, 'mobile-unlocked.pdf');
+    await expectPdfOpensWithoutPassword(unlockedPdf);
   });
 });

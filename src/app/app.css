@@ -540,7 +540,7 @@ progress::-moz-progress-bar {
 
 @media (max-width: 780px) {
   :host {
-    --mobile-action-space: 340px;
+    --mobile-action-space: 430px;
   }
 
   .global-nav {
@@ -635,7 +635,7 @@ progress::-moz-progress-bar {
 
 @media (max-width: 430px) {
   :host {
-    --mobile-action-space: 380px;
+    --mobile-action-space: 470px;
   }
 
   .preview-card {
