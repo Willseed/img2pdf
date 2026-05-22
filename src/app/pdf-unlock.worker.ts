@@ -57,20 +57,23 @@ async function processJob(message: StartUnlockMessage): Promise<void> {
       throw new PdfUnlockWorkerError('UNSUPPORTED_FORMAT', COPY.unsupportedFormat);
     }
 
-    const encryption = document.getMetaData(mupdf.Document.META_ENCRYPTION);
-    if (!isEncrypted(encryption)) {
+    const needsPassword = document.needsPassword();
+    const encryption = needsPassword
+      ? undefined
+      : document.getMetaData(mupdf.Document.META_ENCRYPTION);
+    if (!needsPassword && !isEncrypted(encryption)) {
       throw new PdfUnlockWorkerError('UNENCRYPTED_PDF', COPY.unencryptedPdf);
     }
 
-    const needsPassword = document.needsPassword();
-    if (needsPassword) {
+    const shouldAuthenticate = needsPassword || message.password.length > 0;
+    if (shouldAuthenticate) {
       if (!message.password) {
         throw new PdfUnlockWorkerError('MISSING_PASSWORD', COPY.missingPassword);
       }
 
       postProgress(message.jobId, 'authenticating', 45);
       const authResult = document.authenticatePassword(message.password);
-      if ((authResult & 6) === 0) {
+      if (!isAuthenticationSuccessful(authResult)) {
         throw new PdfUnlockWorkerError('WRONG_PASSWORD', COPY.wrongPassword);
       }
     }
@@ -158,6 +161,10 @@ function configureMuPdfWasmAsset(): void {
 
 function isEncrypted(encryption: string | undefined): boolean {
   return Boolean(encryption && encryption !== 'None');
+}
+
+function isAuthenticationSuccessful(authResult: number): boolean {
+  return authResult > 0;
 }
 
 function throwIfCancelled(jobId: string): void {

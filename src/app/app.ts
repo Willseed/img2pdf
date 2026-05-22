@@ -24,6 +24,7 @@ export class App {
   protected readonly isUnlockDragging = signal(false);
   protected readonly activeTool = signal<ToolTab>('images');
   protected readonly unlockPassword = signal('');
+  protected readonly unlockPasswordVisible = signal(false);
   protected readonly maxImages = MAX_IMAGES;
   protected readonly text = ZH_TW.app;
   protected readonly heroText = computed(() =>
@@ -100,6 +101,10 @@ export class App {
 
   protected onUnlockPasswordInput(event: Event): void {
     this.unlockPassword.set((event.target as HTMLInputElement).value);
+  }
+
+  protected toggleUnlockPasswordVisibility(): void {
+    this.unlockPasswordVisible.update((visible) => !visible);
   }
 
   protected async generatePdf(): Promise<void> {

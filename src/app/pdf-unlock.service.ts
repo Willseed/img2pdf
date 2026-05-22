@@ -1,6 +1,7 @@
 import { Injectable, OnDestroy, computed, signal } from '@angular/core';
 import { ZH_TW } from './i18n';
 import {
+  PdfUnlockErrorCode,
   PdfUnlockState,
   StartUnlockMessage,
   UnlockCompleteMessage,
@@ -9,9 +10,28 @@ import {
 } from './pdf-unlock-worker.types';
 
 const COPY = ZH_TW.unlockService;
+const WORKER_COPY = ZH_TW.unlockWorker;
 const MAX_PDF_FILE_SIZE_MB = 100;
 const MAX_PDF_FILE_SIZE_BYTES = MAX_PDF_FILE_SIZE_MB * 1024 * 1024;
-const ACCEPTED_PDF_MIME_TYPES = new Set(['application/pdf', 'application/x-pdf']);
+
+const UNLOCK_ERROR_MESSAGES = {
+  MISSING_PASSWORD: WORKER_COPY.missingPassword,
+  WRONG_PASSWORD: WORKER_COPY.wrongPassword,
+  UNENCRYPTED_PDF: WORKER_COPY.unencryptedPdf,
+  UNSUPPORTED_FORMAT: WORKER_COPY.unsupportedFormat,
+  CORRUPT_PDF: WORKER_COPY.corruptPdf,
+  UNLOCK_FAILED: COPY.unlockFailed,
+  CANCELLED_BY_USER: WORKER_COPY.cancelled,
+} satisfies Record<PdfUnlockErrorCode, string>;
+
+class PdfUnlockServiceError extends Error {
+  constructor(
+    readonly code: PdfUnlockErrorCode,
+    message: string = UNLOCK_ERROR_MESSAGES[code],
+  ) {
+    super(message);
+  }
+}
 
 @Injectable({ providedIn: 'root' })
 export class PdfUnlockService implements OnDestroy {
@@ -195,7 +215,7 @@ export class PdfUnlockService implements OnDestroy {
             break;
           case 'UNLOCK_ERROR':
             this.cancelActiveWorker();
-            reject(new Error(message.message));
+            reject(new PdfUnlockServiceError(message.errorCode));
             break;
           case 'UNLOCK_CANCELLED':
             this.cancelActiveWorker();
@@ -206,14 +226,19 @@ export class PdfUnlockService implements OnDestroy {
 
       this.worker.onerror = (event) => {
         this.cancelActiveWorker();
-        reject(new Error(event.message || COPY.workerFailed));
+        reject(
+          new PdfUnlockServiceError(
+            'UNLOCK_FAILED',
+            event.message || COPY.workerFailed,
+          ),
+        );
       };
 
       void file
         .arrayBuffer()
         .then((buffer) => {
           if (!this.worker || this.activeJobId !== jobId) {
-            throw new Error(COPY.cancelledBeforeStart);
+            throw new PdfUnlockServiceError('CANCELLED_BY_USER', COPY.cancelledBeforeStart);
           }
 
           const message: StartUnlockMessage = {
@@ -227,7 +252,11 @@ export class PdfUnlockService implements OnDestroy {
         })
         .catch((error: unknown) => {
           this.cancelActiveWorker();
-          reject(error instanceof Error ? error : new Error(String(error)));
+          reject(
+            error instanceof PdfUnlockServiceError
+              ? error
+              : new PdfUnlockServiceError('UNLOCK_FAILED'),
+          );
         });
     });
   }
@@ -256,7 +285,7 @@ export class PdfUnlockService implements OnDestroy {
 
   private handleUnlockError(error: unknown): void {
     this.cancelActiveWorker();
-    const message = error instanceof Error && error.message ? error.message : COPY.unlockFailed;
+    const message = error instanceof PdfUnlockServiceError ? error.message : COPY.unlockFailed;
     this.stateSignal.update((state) => ({
       ...state,
       status: 'error',
@@ -274,12 +303,7 @@ export class PdfUnlockService implements OnDestroy {
       return COPY.fileTooLarge(file.name, MAX_PDF_FILE_SIZE_MB);
     }
 
-    const hasPdfName = /\.pdf$/i.test(file.name);
-    const hasPdfMime = ACCEPTED_PDF_MIME_TYPES.has(file.type);
-    if (!hasPdfName && !hasPdfMime) {
-      return COPY.unsupportedType(file.name);
-    }
-
+    // File names and browser MIME values can be wrong; MuPDF validates the actual bytes.
     return null;
   }
 

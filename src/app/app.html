@@ -264,17 +264,38 @@
             <p class="muted">{{ text.unlock.actions.description }}</p>
           </div>
 
-          <label class="password-field">
-            <span>{{ text.unlock.actions.passwordLabel }}</span>
-            <input
-              type="password"
-              autocomplete="current-password"
-              [placeholder]="text.unlock.actions.passwordPlaceholder"
-              [value]="unlockPassword()"
-              [disabled]="pdfUnlock.isProcessing()"
-              (input)="onUnlockPasswordInput($event)"
-            />
-          </label>
+          <div class="password-field">
+            <label for="unlock-password">{{ text.unlock.actions.passwordLabel }}</label>
+            <div class="password-input-row">
+              <input
+                id="unlock-password"
+                [type]="unlockPasswordVisible() ? 'text' : 'password'"
+                autocomplete="current-password"
+                [placeholder]="text.unlock.actions.passwordPlaceholder"
+                [value]="unlockPassword()"
+                [disabled]="pdfUnlock.isProcessing()"
+                (input)="onUnlockPasswordInput($event)"
+              />
+              <button
+                type="button"
+                class="password-toggle"
+                aria-controls="unlock-password"
+                [attr.aria-label]="
+                  unlockPasswordVisible()
+                    ? text.unlock.actions.hidePasswordLabel
+                    : text.unlock.actions.showPasswordLabel
+                "
+                [attr.aria-pressed]="unlockPasswordVisible()"
+                (click)="toggleUnlockPasswordVisibility()"
+              >
+                {{
+                  unlockPasswordVisible()
+                    ? text.unlock.actions.hidePassword
+                    : text.unlock.actions.showPassword
+                }}
+              </button>
+            </div>
+          </div>
 
           <div class="progress-wrap" aria-live="polite">
             <span id="unlock-progress-label" class="progress-label">{{

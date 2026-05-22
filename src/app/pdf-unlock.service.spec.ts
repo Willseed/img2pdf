@@ -98,20 +98,25 @@ describe('PdfUnlockService', () => {
     expect(service.canUnlock()).toBe(true);
   });
 
-  it('rejects invalid unlock files with zh-TW errors', () => {
+  it('rejects empty unlock files with zh-TW errors', () => {
     expect(service.selectFiles([new File([], 'empty.pdf', { type: 'application/pdf' })])).toEqual([
       ZH_TW.unlockService.fileEmpty('empty.pdf'),
     ]);
     expect(service.state().file).toBeNull();
     expect(service.state().status).toBe('error');
     expect(service.state().error).toBe(ZH_TW.unlockService.fileEmpty('empty.pdf'));
+  });
 
-    const textFile = new File(['not a pdf'], 'notes.txt', { type: 'text/plain' });
-    expect(service.selectFiles([textFile])).toEqual([
-      ZH_TW.unlockService.unsupportedType('notes.txt'),
-    ]);
-    expect(service.state().file).toBeNull();
-    expect(service.state().error).toBe(ZH_TW.unlockService.unsupportedType('notes.txt'));
+  it('allows MuPDF to validate files whose extension or MIME type is wrong', () => {
+    const renamedPdf = new File([COMPLETE_PDF], '截圖 2026-05-22 上午8.39.57.png', {
+      type: 'image/png',
+    });
+
+    expect(service.selectFiles([renamedPdf])).toEqual([]);
+    expect(service.state().file).toBe(renamedPdf);
+    expect(service.state().status).toBe('idle');
+    expect(service.state().error).toBeNull();
+    expect(service.state().progressText).toBe(ZH_TW.unlockService.selected(renamedPdf.name));
   });
 
   it('tracks progress, creates an unlocked PDF URL, and revokes it on replacement', async () => {
@@ -182,7 +187,7 @@ describe('PdfUnlockService', () => {
             type: 'UNLOCK_ERROR',
             jobId: message.jobId,
             errorCode: 'WRONG_PASSWORD',
-            message: ZH_TW.unlockWorker.wrongPassword,
+            message: 'Wrong password',
           });
           return;
         }
@@ -210,6 +215,7 @@ describe('PdfUnlockService', () => {
     expect(service.state().status).toBe('error');
     expect(service.state().file).toBe(lockedFile);
     expect(service.state().error).toBe(ZH_TW.unlockWorker.wrongPassword);
+    expect(service.state().progressText).toBe(ZH_TW.unlockWorker.wrongPassword);
     expect(service.canUnlock()).toBe(true);
 
     await service.unlock('correct');
@@ -217,6 +223,24 @@ describe('PdfUnlockService', () => {
     expect(service.state().status).toBe('complete');
     expect(service.state().error).toBeNull();
     expect(service.state().unlockedUrl).toBe('blob:unlock-1');
+  });
+
+  it('surfaces worker runtime error details when unlock worker crashes', async () => {
+    const lockedFile = pdfFile('worker-error.pdf');
+    service.selectFiles([lockedFile]);
+
+    const unlockPromise = service.unlock('secret');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const worker = MockUnlockWorker.instances[0];
+    worker.onerror?.({ message: 'MuPDF worker crashed' } as ErrorEvent);
+    await unlockPromise;
+
+    expect(worker.terminated).toBe(true);
+    expect(service.state().status).toBe('error');
+    expect(service.state().error).toBe('MuPDF worker crashed');
+    expect(service.state().progressText).toBe('MuPDF worker crashed');
   });
 
   it('cancels active unlock work and returns to idle state', async () => {

@@ -114,4 +114,52 @@ describe('App', () => {
 
     expect(passwordInput.value).toBe('secret-pass');
   });
+
+  it('should toggle the unlock password visibility with accessible zh-TW controls', () => {
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    compiled.querySelector<HTMLButtonElement>('#unlock-tool-tab')?.click();
+    fixture.detectChanges();
+
+    const passwordInput = compiled.querySelector<HTMLInputElement>('#unlock-password');
+    const toggleButton = compiled.querySelector<HTMLButtonElement>('.password-toggle');
+
+    expect(passwordInput).not.toBeNull();
+    expect(toggleButton).not.toBeNull();
+    if (!passwordInput || !toggleButton) {
+      throw new Error('Unlock password visibility controls were not rendered.');
+    }
+
+    expect(passwordInput.type).toBe('password');
+    expect(toggleButton.textContent?.trim()).toBe(ZH_TW.app.unlock.actions.showPassword);
+    expect(toggleButton.getAttribute('aria-label')).toBe(
+      ZH_TW.app.unlock.actions.showPasswordLabel,
+    );
+    expect(toggleButton.getAttribute('aria-pressed')).toBe('false');
+
+    passwordInput.value = 'secret-pass';
+    passwordInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    toggleButton.click();
+    fixture.detectChanges();
+
+    expect(passwordInput.type).toBe('text');
+    expect(passwordInput.value).toBe('secret-pass');
+    expect(toggleButton.textContent?.trim()).toBe(ZH_TW.app.unlock.actions.hidePassword);
+    expect(toggleButton.getAttribute('aria-label')).toBe(
+      ZH_TW.app.unlock.actions.hidePasswordLabel,
+    );
+    expect(toggleButton.getAttribute('aria-pressed')).toBe('true');
+
+    toggleButton.click();
+    fixture.detectChanges();
+
+    expect(passwordInput.type).toBe('password');
+    expect(passwordInput.value).toBe('secret-pass');
+    expect(toggleButton.textContent?.trim()).toBe(ZH_TW.app.unlock.actions.showPassword);
+    expect(toggleButton.getAttribute('aria-pressed')).toBe('false');
+  });
 });
