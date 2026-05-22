@@ -1,4 +1,12 @@
-import { Component, ElementRef, ViewChild, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  OnDestroy,
+  ViewChild,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { BUILD_HASH } from './build-info';
 import { ZH_TW } from './i18n';
 import { MAX_IMAGES, PdfBuilderService } from './pdf-builder.service';
@@ -13,9 +21,11 @@ type ToolTab = 'images' | 'unlock';
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
-export class App {
+export class App implements OnDestroy {
   @ViewChild('fileInput') private fileInput?: ElementRef<HTMLInputElement>;
   @ViewChild('unlockFileInput') private unlockFileInput?: ElementRef<HTMLInputElement>;
+  @ViewChild('imageActionPanel') private imageActionPanel?: ElementRef<HTMLElement>;
+  @ViewChild('unlockActionPanel') private unlockActionPanel?: ElementRef<HTMLElement>;
 
   protected readonly pdfBuilder = inject(PdfBuilderService);
   protected readonly pdfUnlock = inject(PdfUnlockService);
@@ -23,13 +33,22 @@ export class App {
   protected readonly isDragging = signal(false);
   protected readonly isUnlockDragging = signal(false);
   protected readonly activeTool = signal<ToolTab>('images');
+  protected readonly highlightedActionPanel = signal<ToolTab | null>(null);
   protected readonly unlockPassword = signal('');
   protected readonly unlockPasswordVisible = signal(false);
   protected readonly maxImages = MAX_IMAGES;
   protected readonly text = ZH_TW.app;
+  private readonly mobileBreakpoint = 780;
+  private actionPanelHighlightTimeout?: ReturnType<typeof setTimeout>;
   protected readonly heroText = computed(() =>
     this.activeTool() === 'images' ? this.text.hero : this.text.unlockHero,
   );
+
+  ngOnDestroy(): void {
+    if (this.actionPanelHighlightTimeout) {
+      clearTimeout(this.actionPanelHighlightTimeout);
+    }
+  }
 
   protected imageStatusLabel(status: ImageStatus): string {
     return ZH_TW.imageStatus[status];
@@ -50,7 +69,7 @@ export class App {
   protected onFileChange(event: Event): void {
     const input = event.target as HTMLInputElement;
     if (input.files) {
-      this.pdfBuilder.addFiles(input.files);
+      this.addImagesAndGuide(input.files);
       input.value = '';
     }
   }
@@ -69,14 +88,14 @@ export class App {
     this.isDragging.set(false);
     const files = event.dataTransfer?.files;
     if (files) {
-      this.pdfBuilder.addFiles(files);
+      this.addImagesAndGuide(files);
     }
   }
 
   protected onUnlockFileChange(event: Event): void {
     const input = event.target as HTMLInputElement;
     if (input.files) {
-      this.pdfUnlock.selectFiles(input.files);
+      this.addUnlockFileAndGuide(input.files);
       input.value = '';
     }
   }
@@ -95,7 +114,7 @@ export class App {
     this.isUnlockDragging.set(false);
     const files = event.dataTransfer?.files;
     if (files) {
-      this.pdfUnlock.selectFiles(files);
+      this.addUnlockFileAndGuide(files);
     }
   }
 
@@ -125,5 +144,63 @@ export class App {
 
   protected formatPdfSize(file: File): string {
     return this.text.unlock.details.size((file.size / (1024 * 1024)).toFixed(2));
+  }
+
+  private addImagesAndGuide(files: FileList): void {
+    const beforeCount = this.pdfBuilder.selectedCount();
+    this.pdfBuilder.addFiles(files);
+    if (this.pdfBuilder.selectedCount() > beforeCount) {
+      this.guideToActionPanel('images');
+    }
+  }
+
+  private addUnlockFileAndGuide(files: FileList): void {
+    const previousFile = this.pdfUnlock.state().file;
+    this.pdfUnlock.selectFiles(files);
+    const nextFile = this.pdfUnlock.state().file;
+    if (nextFile && nextFile !== previousFile) {
+      this.guideToActionPanel('unlock');
+    }
+  }
+
+  private guideToActionPanel(tool: ToolTab): void {
+    if (!this.isMobileViewport()) {
+      return;
+    }
+    this.highlightActionPanel(tool);
+    requestAnimationFrame(() => {
+      this.getActionPanelElement(tool)?.scrollIntoView({
+        behavior: this.prefersReducedMotion() ? 'auto' : 'smooth',
+        block: 'start',
+      });
+    });
+  }
+
+  private prefersReducedMotion(): boolean {
+    return (
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    );
+  }
+
+  private highlightActionPanel(tool: ToolTab): void {
+    this.highlightedActionPanel.set(tool);
+    if (this.actionPanelHighlightTimeout) {
+      clearTimeout(this.actionPanelHighlightTimeout);
+    }
+    this.actionPanelHighlightTimeout = setTimeout(() => {
+      this.highlightedActionPanel.set(null);
+    }, 2500);
+  }
+
+  private getActionPanelElement(tool: ToolTab): HTMLElement | undefined {
+    return tool === 'images'
+      ? this.imageActionPanel?.nativeElement
+      : this.unlockActionPanel?.nativeElement;
+  }
+
+  private isMobileViewport(): boolean {
+    return typeof window !== 'undefined' && window.innerWidth <= this.mobileBreakpoint;
   }
 }

@@ -589,6 +589,15 @@ progress::-moz-progress-bar {
   .action-panel {
     order: 2;
     margin-bottom: max(4px, env(safe-area-inset-bottom));
+    transition:
+      border-color 220ms ease,
+      box-shadow 220ms ease;
+  }
+
+  .action-panel.guided-operation {
+    border-color: var(--color-on-dark);
+    box-shadow: 0 0 0 1px rgba(41, 151, 255, 0.32);
+    animation: mobile-guidance-pulse 1300ms ease-out 1;
   }
 
   .preview-list {
@@ -618,6 +627,32 @@ progress::-moz-progress-bar {
 
   .action-panel .pill {
     min-height: 44px;
+  }
+}
+
+@media (max-width: 780px) and (prefers-reduced-motion: reduce) {
+  .action-panel.guided-operation {
+    animation: none;
+  }
+}
+
+@keyframes mobile-guidance-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(41, 151, 255, 0.4);
+  }
+
+  70% {
+    box-shadow: 0 0 0 6px rgba(41, 151, 255, 0.12);
+  }
+
+  100% {
+    box-shadow: 0 0 0 1px rgba(41, 151, 255, 0.32);
+  }
+}
+
+@media (max-width: 780px) and (prefers-reduced-motion: reduce) {
+  .action-panel {
+    transition: none;
   }
 }
 

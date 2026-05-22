@@ -136,7 +136,12 @@
           }
         </section>
 
-        <section class="panel action-panel" aria-labelledby="process-title">
+        <section
+          #imageActionPanel
+          class="panel action-panel"
+          [class.guided-operation]="highlightedActionPanel() === 'images'"
+          aria-labelledby="process-title"
+        >
           <div class="panel-heading">
             <p class="eyebrow on-dark">{{ text.actions.step }}</p>
             <h2 id="process-title">{{ text.actions.title }}</h2>
@@ -257,7 +262,12 @@
           }
         </section>
 
-        <section class="panel action-panel" aria-labelledby="unlock-process-title">
+        <section
+          #unlockActionPanel
+          class="panel action-panel"
+          [class.guided-operation]="highlightedActionPanel() === 'unlock'"
+          aria-labelledby="unlock-process-title"
+        >
           <div class="panel-heading">
             <p class="eyebrow on-dark">{{ text.unlock.actions.step }}</p>
             <h2 id="unlock-process-title">{{ text.unlock.actions.title }}</h2>

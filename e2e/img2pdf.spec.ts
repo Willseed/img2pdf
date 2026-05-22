@@ -153,12 +153,17 @@ async function expectPreviewCardsFitPanel(page: Page) {
   }
 }
 
-async function expectActionPanelNotViewportFixed(page: Page) {
-  const actionPanel = page.locator('.action-panel');
+async function expectActionPanelNotViewportFixed(page: Page, actionPanel = page.locator('.action-panel')) {
   await expect(actionPanel).toBeVisible();
 
   const position = await actionPanel.evaluate((element) => getComputedStyle(element).position);
   expect(position).not.toBe('fixed');
+}
+
+async function expectGuidedOperationCue(actionPanel: Locator) {
+  await expect(actionPanel).toHaveClass(/guided-operation/, {
+    timeout: 10_000,
+  });
 }
 
 async function scrollActionIntoView(action: Locator) {
@@ -324,10 +329,11 @@ test.describe('img2pdf browser workflow', () => {
     await expectDocumentFitsViewport(page);
     await page.locator('#image-input').setInputFiles(imagePayloads(3, longImageName));
 
-    const actionPanel = page.locator('.action-panel');
+    const actionPanel = page.locator('section.action-panel[aria-labelledby="process-title"]');
     const generateButton = page.getByRole('button', { name: ZH_TW.app.actions.generate });
 
-    await expectActionPanelNotViewportFixed(page);
+    await expectActionPanelNotViewportFixed(page, actionPanel);
+    await expectGuidedOperationCue(actionPanel);
     await expect(actionPanel).toBeVisible();
     await expect(generateButton).toBeVisible();
     await expectDocumentFitsViewport(page);
@@ -456,11 +462,13 @@ test.describe('img2pdf browser workflow', () => {
     await openApp(page, MOBILE_VIEWPORT);
 
     const unlockTab = page.getByRole('tab', { name: new RegExp(ZH_TW.app.tabs.unlock) });
+    const unlockActionPanel = page.locator('section.action-panel[aria-labelledby="unlock-process-title"]');
     await expect(unlockTab).toBeVisible();
     await expect(unlockTab).toBeInViewport();
     await selectUnlockTab(page);
-    await expectActionPanelNotViewportFixed(page);
+    await expectActionPanelNotViewportFixed(page, unlockActionPanel);
     await uploadUnlockPdf(page, await createEncryptedPdfFixture(), 'mobile-locked.pdf');
+    await expectGuidedOperationCue(unlockActionPanel);
 
     const unlockButton = page.getByRole('button', { name: ZH_TW.app.unlock.actions.unlock });
     await expect(unlockButton).toBeVisible();

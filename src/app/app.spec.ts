@@ -9,6 +9,10 @@ describe('App', () => {
     }).compileComponents();
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('should create the app', () => {
     const fixture = TestBed.createComponent(App);
     const app = fixture.componentInstance;
@@ -161,5 +165,77 @@ describe('App', () => {
     expect(passwordInput.value).toBe('secret-pass');
     expect(toggleButton.textContent?.trim()).toBe(ZH_TW.app.unlock.actions.showPassword);
     expect(toggleButton.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('should use auto scroll when reduced motion is preferred', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance as any;
+    const panel = document.createElement('div');
+    const scrollSpy = vi.fn();
+    Object.defineProperty(panel, 'scrollIntoView', {
+      configurable: true,
+      value: scrollSpy,
+    });
+
+    app.imageActionPanel = { nativeElement: panel };
+    vi.spyOn(app, 'isMobileViewport').mockReturnValue(true);
+    vi.spyOn(app, 'highlightActionPanel');
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback: FrameRequestCallback) => {
+      callback(0);
+      return 0;
+    });
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: vi.fn().mockReturnValue({
+        matches: true,
+        media: '(prefers-reduced-motion: reduce)',
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      } as MediaQueryList),
+    });
+
+    app.guideToActionPanel('images');
+
+    expect(scrollSpy).toHaveBeenCalledWith({ behavior: 'auto', block: 'start' });
+  });
+
+  it('should keep smooth scroll when reduced motion is not preferred', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance as any;
+    const panel = document.createElement('div');
+    const scrollSpy = vi.fn();
+    Object.defineProperty(panel, 'scrollIntoView', {
+      configurable: true,
+      value: scrollSpy,
+    });
+
+    app.imageActionPanel = { nativeElement: panel };
+    vi.spyOn(app, 'isMobileViewport').mockReturnValue(true);
+    vi.spyOn(app, 'highlightActionPanel');
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback: FrameRequestCallback) => {
+      callback(0);
+      return 0;
+    });
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: vi.fn().mockReturnValue({
+        matches: false,
+        media: '(prefers-reduced-motion: reduce)',
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      } as MediaQueryList),
+    });
+
+    app.guideToActionPanel('images');
+
+    expect(scrollSpy).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
   });
 });
