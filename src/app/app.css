@@ -539,10 +539,6 @@ progress::-moz-progress-bar {
 }
 
 @media (max-width: 780px) {
-  :host {
-    --mobile-action-space: 430px;
-  }
-
   .global-nav {
     padding: 0 16px;
   }
@@ -570,7 +566,7 @@ progress::-moz-progress-bar {
     display: flex;
     flex-direction: column;
     overflow-y: auto;
-    padding-bottom: calc(var(--mobile-action-space) + env(safe-area-inset-bottom));
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
   }
 
   .panel {
@@ -587,12 +583,12 @@ progress::-moz-progress-bar {
   .preview-panel {
     grid-column: auto;
     min-height: 320px;
+    order: 3;
   }
 
   .action-panel {
-    position: fixed;
-    z-index: 20;
-    inset: auto 14px calc(12px + env(safe-area-inset-bottom)) 14px;
+    order: 2;
+    margin-bottom: max(4px, env(safe-area-inset-bottom));
   }
 
   .preview-list {
@@ -620,23 +616,12 @@ progress::-moz-progress-bar {
     width: 100%;
   }
 
-  .action-panel .muted {
-    display: none;
-  }
-
   .action-panel .pill {
     min-height: 44px;
-  }
-
-  .action-panel .secondary:disabled {
-    display: none;
   }
 }
 
 @media (max-width: 430px) {
-  :host {
-    --mobile-action-space: 470px;
-  }
 
   .preview-card {
     grid-template-columns: 56px minmax(0, 1fr);

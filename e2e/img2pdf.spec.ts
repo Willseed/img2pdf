@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { deflateSync } from 'node:zlib';
@@ -153,6 +153,19 @@ async function expectPreviewCardsFitPanel(page: Page) {
   }
 }
 
+async function expectActionPanelNotViewportFixed(page: Page) {
+  const actionPanel = page.locator('.action-panel');
+  await expect(actionPanel).toBeVisible();
+
+  const position = await actionPanel.evaluate((element) => getComputedStyle(element).position);
+  expect(position).not.toBe('fixed');
+}
+
+async function scrollActionIntoView(action: Locator) {
+  await action.scrollIntoViewIfNeeded();
+  await expect(action).toBeInViewport();
+}
+
 function createPngFixture(): Buffer {
   const width = 8;
   const height = 8;
@@ -304,7 +317,9 @@ test.describe('img2pdf browser workflow', () => {
     await expectPreviewCardsFitPanel(page);
   });
 
-  test('keeps the mobile create and download action visible in the viewport', async ({ page }) => {
+  test('keeps the mobile create and download action visible in the viewport', async ({
+    page,
+  }, testInfo) => {
     await openApp(page, MOBILE_VIEWPORT);
     await expectDocumentFitsViewport(page);
     await page.locator('#image-input').setInputFiles(imagePayloads(3, longImageName));
@@ -312,23 +327,27 @@ test.describe('img2pdf browser workflow', () => {
     const actionPanel = page.locator('.action-panel');
     const generateButton = page.getByRole('button', { name: ZH_TW.app.actions.generate });
 
+    await expectActionPanelNotViewportFixed(page);
     await expect(actionPanel).toBeVisible();
     await expect(generateButton).toBeVisible();
-    await expect(generateButton).toBeInViewport();
     await expectDocumentFitsViewport(page);
 
-    await page.locator('.workflow-grid').evaluate((element) => {
-      element.scrollTop = element.scrollHeight;
-    });
-    await expect(generateButton).toBeInViewport();
+    await scrollActionIntoView(generateButton);
     await expectDocumentFitsViewport(page);
 
     await generateButton.click();
 
     const downloadLink = page.getByRole('link', { name: ZH_TW.app.actions.download });
     await expect(downloadLink).toBeVisible({ timeout: 30_000 });
-    await expect(downloadLink).toBeInViewport();
+    await scrollActionIntoView(downloadLink);
     await expectDocumentFitsViewport(page);
+
+    const downloadPromise = page.waitForEvent('download');
+    await downloadLink.click();
+    const download = await downloadPromise;
+    const pdfPath = join(testInfo.outputDir, 'mobile-created.pdf');
+    await download.saveAs(pdfPath);
+    expect(download.suggestedFilename()).toMatch(/\.pdf$/);
   });
 
   test('rejects images above the 15 file cap', async ({ page }) => {
@@ -440,17 +459,18 @@ test.describe('img2pdf browser workflow', () => {
     await expect(unlockTab).toBeVisible();
     await expect(unlockTab).toBeInViewport();
     await selectUnlockTab(page);
+    await expectActionPanelNotViewportFixed(page);
     await uploadUnlockPdf(page, await createEncryptedPdfFixture(), 'mobile-locked.pdf');
 
     const unlockButton = page.getByRole('button', { name: ZH_TW.app.unlock.actions.unlock });
     await expect(unlockButton).toBeVisible();
-    await expect(unlockButton).toBeInViewport();
+    await scrollActionIntoView(unlockButton);
 
     await unlockSelectedPdf(page, UNLOCK_PASSWORD);
 
     const downloadLink = page.getByRole('link', { name: ZH_TW.app.unlock.actions.download });
     await expect(downloadLink).toBeVisible({ timeout: 60_000 });
-    await expect(downloadLink).toBeInViewport();
+    await scrollActionIntoView(downloadLink);
     await expectDocumentFitsViewport(page);
 
     const unlockedPdf = await downloadUnlockedPdf(page, testInfo.outputDir, 'mobile-unlocked.pdf');
