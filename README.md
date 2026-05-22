@@ -59,6 +59,11 @@ For CI-style production builds with a hash build identity:
 npm run build:ci
 ```
 
+The Angular asset pipeline copies `public/_headers` into `dist/img2pdf/browser/_headers`.
+Cloudflare Pages can use this file to apply the deployment CSP, including the MuPDF
+WebAssembly allowances (`'unsafe-eval'` and `'wasm-unsafe-eval'` on `script-src`).
+Production builds run `scripts/check-headers.mjs` afterward to verify the artifact.
+
 ## Running unit tests
 
 To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
