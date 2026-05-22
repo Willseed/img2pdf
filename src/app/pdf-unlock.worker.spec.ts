@@ -73,12 +73,12 @@ describe('pdf-unlock.worker', () => {
     });
     mockMuPdf(unlockDocument);
 
-    await startUnlockWorker('61430824');
+    await startUnlockWorker('correct-password');
 
     const completeMessage = postedMessages.find(
       ({ message }) => message.type === 'UNLOCK_COMPLETE',
     )?.message;
-    expect(unlockDocument.document.authenticatePassword).toHaveBeenCalledWith('61430824');
+    expect(unlockDocument.document.authenticatePassword).toHaveBeenCalledWith('correct-password');
     expect(unlockDocument.pdf.saveToBuffer).toHaveBeenCalledWith(
       'decrypt,garbage=deduplicate,compress=yes',
     );
@@ -112,6 +112,30 @@ describe('pdf-unlock.worker', () => {
       type: 'UNLOCK_ERROR',
       errorCode: 'WRONG_PASSWORD',
       message: ZH_TW.unlockWorker.wrongPassword,
+    });
+  });
+
+  it('returns a clear CSP error before importing MuPDF when WebAssembly compilation is blocked', async () => {
+    const mupdfImport = vi.fn(() => {
+      throw new Error('MuPDF should not be imported when the WASM preflight fails.');
+    });
+    vi.doMock('mupdf', mupdfImport);
+    vi.spyOn(WebAssembly, 'compile').mockRejectedValue(
+      new Error(
+        "Refused to compile WebAssembly module because 'unsafe-eval' is not an allowed source of script.",
+      ),
+    );
+
+    await startUnlockWorker('secret');
+
+    const errorMessage = postedMessages.find(
+      ({ message }) => message.type === 'UNLOCK_ERROR',
+    )?.message as UnlockErrorMessage | undefined;
+    expect(mupdfImport).not.toHaveBeenCalled();
+    expect(errorMessage).toMatchObject({
+      type: 'UNLOCK_ERROR',
+      errorCode: 'WASM_BLOCKED_BY_CSP',
+      message: ZH_TW.unlockWorker.wasmBlockedByCsp,
     });
   });
 });

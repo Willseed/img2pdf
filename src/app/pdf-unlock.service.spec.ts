@@ -225,6 +225,34 @@ describe('PdfUnlockService', () => {
     expect(service.state().unlockedUrl).toBe('blob:unlock-1');
   });
 
+  it('shows Cloudflare CSP guidance when WebAssembly compilation is blocked', async () => {
+    workerMessageHandler = (worker, message) => {
+      if (message.type !== 'START_UNLOCK') {
+        return;
+      }
+
+      queueMicrotask(() => {
+        worker.emit({
+          type: 'UNLOCK_ERROR',
+          jobId: message.jobId,
+          errorCode: 'WASM_BLOCKED_BY_CSP',
+          message: 'CSP blocked WebAssembly',
+        });
+      });
+    };
+
+    const lockedFile = pdfFile('csp-blocked.pdf');
+    service.selectFiles([lockedFile]);
+
+    await service.unlock('secret');
+
+    expect(service.state().status).toBe('error');
+    expect(service.state().file).toBe(lockedFile);
+    expect(service.state().error).toBe(ZH_TW.unlockWorker.wasmBlockedByCsp);
+    expect(service.state().progressText).toBe(ZH_TW.unlockWorker.wasmBlockedByCsp);
+    expect(service.canUnlock()).toBe(true);
+  });
+
   it('surfaces worker runtime error details when unlock worker crashes', async () => {
     const lockedFile = pdfFile('worker-error.pdf');
     service.selectFiles([lockedFile]);

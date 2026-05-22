@@ -8,6 +8,7 @@ export type PdfUnlockErrorCode =
   | 'UNENCRYPTED_PDF'
   | 'UNSUPPORTED_FORMAT'
   | 'CORRUPT_PDF'
+  | 'WASM_BLOCKED_BY_CSP'
   | 'UNLOCK_FAILED'
   | 'CANCELLED_BY_USER';
 

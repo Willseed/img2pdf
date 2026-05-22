@@ -13,9 +13,11 @@ import {
 
 const COPY = ZH_TW.unlockWorker;
 const SAVE_OPTIONS = 'decrypt,garbage=deduplicate,compress=yes';
+const EMPTY_WASM_MODULE = new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
 
 const cancelledJobs = new Set<string>();
 let mupdfPromise: Promise<typeof mupdfDefault> | null = null;
+let wasmPreflightPromise: Promise<void> | null = null;
 
 class PdfUnlockWorkerError extends Error {
   constructor(
@@ -134,11 +136,61 @@ async function processJob(message: StartUnlockMessage): Promise<void> {
 
 async function loadMuPdf(): Promise<typeof mupdfDefault> {
   if (!mupdfPromise) {
-    configureMuPdfWasmAsset();
-    mupdfPromise = import('mupdf').then((module) => module.default);
+    mupdfPromise = initializeMuPdf().catch((error: unknown) => {
+      mupdfPromise = null;
+      throw error;
+    });
   }
 
   return mupdfPromise;
+}
+
+async function initializeMuPdf(): Promise<typeof mupdfDefault> {
+  try {
+    await ensureWebAssemblyCompilationAllowed();
+    configureMuPdfWasmAsset();
+    return (await import('mupdf')).default;
+  } catch (error) {
+    if (error instanceof PdfUnlockWorkerError) {
+      throw error;
+    }
+
+    if (isLikelyWebAssemblyCspError(error)) {
+      throw new PdfUnlockWorkerError('WASM_BLOCKED_BY_CSP', COPY.wasmBlockedByCsp);
+    }
+
+    throw error;
+  }
+}
+
+async function ensureWebAssemblyCompilationAllowed(): Promise<void> {
+  if (!wasmPreflightPromise) {
+    wasmPreflightPromise = runWebAssemblyPreflight().catch((error: unknown) => {
+      wasmPreflightPromise = null;
+      throw error;
+    });
+  }
+
+  return wasmPreflightPromise;
+}
+
+async function runWebAssemblyPreflight(): Promise<void> {
+  if (typeof WebAssembly === 'undefined' || typeof WebAssembly.compile !== 'function') {
+    throw new PdfUnlockWorkerError('WASM_BLOCKED_BY_CSP', COPY.wasmBlockedByCsp);
+  }
+
+  try {
+    await WebAssembly.compile(EMPTY_WASM_MODULE);
+  } catch {
+    throw new PdfUnlockWorkerError('WASM_BLOCKED_BY_CSP', COPY.wasmBlockedByCsp);
+  }
+}
+
+function isLikelyWebAssemblyCspError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /blocked by|content security policy|csp|disallowed by embedder|refused to compile|script-src|unsafe-eval|wasm-unsafe-eval/i.test(
+    message,
+  );
 }
 
 function configureMuPdfWasmAsset(): void {

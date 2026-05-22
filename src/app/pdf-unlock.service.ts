@@ -20,6 +20,7 @@ const UNLOCK_ERROR_MESSAGES = {
   UNENCRYPTED_PDF: WORKER_COPY.unencryptedPdf,
   UNSUPPORTED_FORMAT: WORKER_COPY.unsupportedFormat,
   CORRUPT_PDF: WORKER_COPY.corruptPdf,
+  WASM_BLOCKED_BY_CSP: WORKER_COPY.wasmBlockedByCsp,
   UNLOCK_FAILED: COPY.unlockFailed,
   CANCELLED_BY_USER: WORKER_COPY.cancelled,
 } satisfies Record<PdfUnlockErrorCode, string>;

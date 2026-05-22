@@ -170,6 +170,8 @@ export const ZH_TW = {
     unencryptedPdf: '這份 PDF 沒有加密或密碼保護。',
     unsupportedFormat: 'MuPDF 無法將此檔案辨識為 PDF。',
     corruptPdf: 'PDF 無法讀取，可能已損毀或格式不受支援。',
+    wasmBlockedByCsp:
+      'MuPDF WebAssembly 解鎖引擎被瀏覽器內容安全政策（CSP）阻擋。請在 Cloudflare 管理的 CSP script-src 中允許 WebAssembly 編譯：加入 \'wasm-unsafe-eval\'；舊瀏覽器可使用 \'unsafe-eval\'。前端程式無法繞過這項限制。',
     cancelled: '已取消 PDF 解鎖。',
   },
 } as const;
