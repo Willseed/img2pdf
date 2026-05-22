@@ -30,7 +30,7 @@ export const ZH_TW = {
     },
     unlockHero: {
       eyebrow: '本機 PDF 解鎖',
-      title: '用 MuPDF 在瀏覽器移除 PDF 密碼。',
+      title: '在瀏覽器安全的移除密碼。',
       lead: '選擇受保護的 PDF、輸入密碼，直接輸出未加密檔案，不會上傳文件。',
     },
     tabs: {
